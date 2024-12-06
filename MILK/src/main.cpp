@@ -16,7 +16,8 @@ const int LEFT_FW = 32;
 const int LEFT_BW = 33;
 const int RIGHT_FW = 25;
 const int RIGHT_BW = 26;
-const int SERVO = 34;
+
+const int SERVO = 16;
 Servo myServo;
 int curAngle = 90;
 
@@ -30,7 +31,7 @@ void handleRoot() {
           "if (!pressed && event.key === 'w') { pressed=true;fetch('/forward'); } "
           "if (!pressed && event.key === 's') { pressed=true;fetch('/backward'); } "
           "if (!pressed && event.key === 'a') { pressed=true;fetch('/left'); } "
-          "if (!pressed && event.key === 'd') { pressed=true;fetch('/right'); } });";
+          "if (!pressed && event.key === 'd') { pressed=true;fetch('/right'); }});";
   html += "document.addEventListener('keyup', function(event) { "
           "pressed = false;"
           "if (['w', 'a', 's', 'd'].includes(event.key)) { fetch('/stop'); } });";
@@ -41,7 +42,6 @@ void handleRoot() {
 }
 
 void runLeft(bool forward) {
-
   digitalWrite(LEFT_FW, forward ? HIGH : LOW);
   digitalWrite(LEFT_BW, forward ? LOW : HIGH);
 }
@@ -49,18 +49,6 @@ void runLeft(bool forward) {
 void runRight(bool forward) {
   digitalWrite(RIGHT_FW, forward ? HIGH : LOW);
   digitalWrite(RIGHT_BW, forward ? LOW : HIGH);
-}
-
-void spinServoClockwise() {
-  curAngle -= 10;
-  myServo.write(curAngle);
-  server.send(200, "text/plain", "Turning clockwise")
-}
-
-void spinServoCounter() {
-  curAngle += 10;
-  myServo.write(curAngle);
-  server.send(200, "text/plain", "Turning counterclockwise")
 }
 
 void forward() {
@@ -112,7 +100,7 @@ void setup() {
 
   //Attach the servo
   myServo.attach(SERVO);
-  myServo.write(0);
+  myServo.write(90);
 
   // Connect to Wi-Fi
   Serial.println(WiFi.macAddress());
@@ -131,8 +119,8 @@ void setup() {
   server.on("/left", HTTP_GET, left);
   server.on("/right", HTTP_GET, right);
   server.on("/stop", HTTP_GET, stopMotors);
-  server.on("/weapon_clock", HTTP_GET, spinServoClockwise);
-  server.on("/weapon_counter", HTTP_GET, spinServoCounter);
+  // server.on("/weapon_clock", HTTP_GET, spinServoClockwise);
+  // server.on("/weapon_counter", HTTP_GET, spinServoCounter);
   
   server.begin();
   Serial.println("HTTP server started");
