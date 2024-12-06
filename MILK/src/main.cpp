@@ -10,7 +10,6 @@ const char* password = "15326009573635923140"; // Your Wi-Fi password
 
 WebServer server(80);
 
-
 // TODO: change these if needed
 const int LEFT_FW = 32;
 const int LEFT_BW = 33;
@@ -23,13 +22,15 @@ void handleRoot() {
   html += "<h1>Control the Motors</h1>";
   html += "<p>Use the W, A, S, D keys to control the motors.</p>";
   html += "<script>";
+  html += "var pressed = false;";
   html += "document.addEventListener('keydown', function(event) { "
-          "if (event.key === 'w') { fetch('/forward'); } "
-          "if (event.key === 's') { fetch('/backward'); } "
-          "if (event.key === 'a') { fetch('/left'); } "
-          "if (event.key === 'd') { fetch('/right'); } });";
+          "if (!pressed && event.key === 'w') { pressed=true;fetch('/forward'); } "
+          "if (!pressed && event.key === 's') { pressed=true;fetch('/backward'); } "
+          "if (!pressed && event.key === 'a') { pressed=true;fetch('/left'); } "
+          "if (!pressed && event.key === 'd') { pressed=true;fetch('/right'); } });";
   html += "document.addEventListener('keyup', function(event) { "
-          "if (['w', 's', 'a', 'd'].includes(event.key)) { fetch('/stop'); } });";
+          "pressed = false;"
+          "if (['w', 'a', 's', 'd'].includes(event.key)) { fetch('/stop'); } });";
   html += "</script>";
   html += "</body></html>";
  
