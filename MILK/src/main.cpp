@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESP32Servo.h>
 
 const bool FORWARD = true;
 const bool BACKWARD = false;
@@ -15,7 +16,9 @@ const int LEFT_FW = 32;
 const int LEFT_BW = 33;
 const int RIGHT_FW = 25;
 const int RIGHT_BW = 26;
-
+const int SERVO = 34;
+Servo myServo;
+int curAngle = 90;
 
 void handleRoot() {
   String html = "<html><body>";
@@ -38,15 +41,26 @@ void handleRoot() {
 }
 
 void runLeft(bool forward) {
-  // left is 1 and 2 i think
+
   digitalWrite(LEFT_FW, forward ? HIGH : LOW);
   digitalWrite(LEFT_BW, forward ? LOW : HIGH);
 }
 
 void runRight(bool forward) {
-  // right is 3 and 4 i think
   digitalWrite(RIGHT_FW, forward ? HIGH : LOW);
   digitalWrite(RIGHT_BW, forward ? LOW : HIGH);
+}
+
+void spinServoClockwise() {
+  curAngle -= 10;
+  myServo.write(curAngle);
+  server.send(200, "text/plain", "Turning clockwise")
+}
+
+void spinServoCounter() {
+  curAngle += 10;
+  myServo.write(curAngle);
+  server.send(200, "text/plain", "Turning counterclockwise")
 }
 
 void forward() {
@@ -73,6 +87,8 @@ void right() {
   server.send(200, "text/plain", "Turning Right");
 }
 
+
+
 void stopMotors() {
   digitalWrite(LEFT_FW, LOW);
   digitalWrite(LEFT_BW, LOW);
@@ -92,6 +108,11 @@ void setup() {
   digitalWrite(LEFT_BW, LOW);
   digitalWrite(RIGHT_FW, LOW);
   digitalWrite(RIGHT_BW, LOW);
+  
+
+  //Attach the servo
+  myServo.attach(SERVO);
+  myServo.write(0);
 
   // Connect to Wi-Fi
   Serial.println(WiFi.macAddress());
@@ -110,6 +131,9 @@ void setup() {
   server.on("/left", HTTP_GET, left);
   server.on("/right", HTTP_GET, right);
   server.on("/stop", HTTP_GET, stopMotors);
+  server.on("/weapon_clock", HTTP_GET, spinServoClockwise);
+  server.on("/weapon_counter", HTTP_GET, spinServoCounter);
+  
   server.begin();
   Serial.println("HTTP server started");
   // Print the IP address
