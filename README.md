@@ -66,10 +66,14 @@
 - Use the terminal in VS Code to run the code
 
 
-_INSERT LEAD NAME HERE_
+Manav Karonde
 
 **Team Members**
-_INSERT NAME HERE_
-
+Manas Agrawal
+Shalini Dhar
+Tanay Garg
+Sanskar Jain
+Yash Karandikar
+Leo Witzke
 
 
