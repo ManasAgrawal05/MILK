@@ -11,10 +11,11 @@ const char* password = "15326009573635923140"; // Your Wi-Fi password
 WebServer server(80);
 
 
-const int GPIO1 = 32;
-const int GPIO2 = 33;
-const int GPIO3 = 25;
-const int GPIO4 = 26;
+// TODO: change these if needed
+const int LEFT_FW = 32;
+const int LEFT_BW = 33;
+const int RIGHT_FW = 25;
+const int RIGHT_BW = 26;
 
 
 void handleRoot() {
@@ -37,14 +38,14 @@ void handleRoot() {
 
 void runLeft(bool forward) {
   // left is 1 and 2 i think
-  digitalWrite(GPIO1, forward ? HIGH : LOW);
-  digitalWrite(GPIO2, forward ? LOW : HIGH);
+  digitalWrite(LEFT_FW, forward ? HIGH : LOW);
+  digitalWrite(LEFT_BW, forward ? LOW : HIGH);
 }
 
 void runRight(bool forward) {
   // right is 3 and 4 i think
-  digitalWrite(GPIO3, forward ? HIGH : LOW);
-  digitalWrite(GPIO4, forward ? LOW : HIGH);
+  digitalWrite(RIGHT_FW, forward ? HIGH : LOW);
+  digitalWrite(RIGHT_BW, forward ? LOW : HIGH);
 }
 
 void forward() {
@@ -72,24 +73,24 @@ void right() {
 }
 
 void stopMotors() {
-  digitalWrite(GPIO1, LOW);
-  digitalWrite(GPIO2, LOW);
-  digitalWrite(GPIO3, LOW);
-  digitalWrite(GPIO4, LOW);
+  digitalWrite(LEFT_FW, LOW);
+  digitalWrite(LEFT_BW, LOW);
+  digitalWrite(RIGHT_FW, LOW);
+  digitalWrite(RIGHT_BW, LOW);
   server.send(200, "text/plain", "Motors Stopped");
 }
 
 void setup() {
   Serial.begin(9600);
-  pinMode(GPIO1, OUTPUT);
-  pinMode(GPIO2, OUTPUT);
-  pinMode(GPIO3, OUTPUT);
-  pinMode(GPIO4, OUTPUT);
+  pinMode(LEFT_FW, OUTPUT);
+  pinMode(LEFT_BW, OUTPUT);
+  pinMode(RIGHT_FW, OUTPUT);
+  pinMode(RIGHT_BW, OUTPUT);
  
-  digitalWrite(GPIO1, LOW);
-  digitalWrite(GPIO2, LOW);
-  digitalWrite(GPIO3, LOW);
-  digitalWrite(GPIO4, LOW);
+  digitalWrite(LEFT_FW, LOW);
+  digitalWrite(LEFT_BW, LOW);
+  digitalWrite(RIGHT_FW, LOW);
+  digitalWrite(RIGHT_BW, LOW);
 
   // Connect to Wi-Fi
   Serial.println(WiFi.macAddress());
