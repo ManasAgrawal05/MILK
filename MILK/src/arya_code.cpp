@@ -1,238 +1,149 @@
 
 
+/////////////////////////////////////////////////////////////////////////////
 
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESP32Servo.h>
 
-// /////////////////////////////////////////////////////////////////////////////
+Servo esc;
+int escPin = 23;
+Servo esc2;
+int escPin2 = 22;
 
-// #include <ESP32Servo.h>
+const char *ssid = "utexas-iot";
+const char *password = "29869378965001014094";
 
-// #define BAUDRATE 15600  
-// #define PARAM_BUFFER_SIZE 10
-// enum commandIDs{
-//     CMD_START           =   0xDE,       // starts a command, 57005
-//     CMD_END             =   0xBE,       // ends a command, 48879
-//     CMD_EXTEND          =   0xFFFF,     // allows command to be split
-//     CMD_ERROR           =   0xC0DE,     // indicates error in command
-//     CMD_PING            =   1,
-//     DRIVE_MOTOR         =   2,          // drive single motor (motor_id, position)
-//     DRIVE_POSTION       =   3,          // drive both motors to position (position)
-//     MIX_DRIVE           =   4,          // drive motors independently (left_position, right_position)
-//     TURN_IN_PLACE       =   5,          // turn robot in place (turn_angle_deg)
-//     DRIVE_DISTANCE      =   6           // drive both motors forward by distance in mm (distance_mm)
-// };
+WebServer server(80);
 
-// Servo esc;
-// int escPin = 23;  // connect ESC signal wire here
-// Servo esc2;
-// int escPin2 = 22;
+const int drivespeed = 250;
+const int rotspeed = 100;
 
-// int escledpin = 2;
+void handleRoot()
+{
+  String html = R"(
+<html><body style="background:#111;color:#eee;font-family:sans-serif;text-align:center;padding-top:40px">
+<h1>MILK Drive Control</h1>
+<p id="status">Waiting for controller...</p>
+<p>Connect Xbox controller via Bluetooth, then press any button.</p>
+<script>
+var gamepadIndex = null;
+var currentCmd = '';
 
+window.addEventListener('gamepadconnected', function(e) {
+  gamepadIndex = e.gamepad.index;
+  document.getElementById('status').textContent = 'Connected: ' + e.gamepad.id;
+});
 
-// //  Uncomment the line according to your sensor type
-// //AS5600L ASL;   //  use default Wire
+window.addEventListener('gamepaddisconnected', function(e) {
+  gamepadIndex = null;
+  document.getElementById('status').textContent = 'Controller disconnected';
+  fetch('/stop');
+  currentCmd = '';
+});
 
-// //uint8_t dummy[4000];
+function getCmd(gp) {
+  var deadzone = 0.2;
+  var x = gp.axes[0]; // left stick X
+  var y = gp.axes[1]; // left stick Y  (-1 = up/forward)
+  if (Math.abs(y) >= Math.abs(x) && Math.abs(y) > deadzone) {
+    return y < 0 ? 'forward' : 'backward';
+  } else if (Math.abs(x) > deadzone) {
+    return x < 0 ? 'left' : 'right';
+  }
+  return 'stop';
+}
 
+function poll() {
+  if (gamepadIndex !== null) {
+    var gp = navigator.getGamepads()[gamepadIndex];
+    if (gp) {
+      var cmd = getCmd(gp);
+      if (cmd !== currentCmd) {
+        currentCmd = cmd;
+        fetch('/' + cmd);
+      }
+    }
+  }
+  requestAnimationFrame(poll);
+}
 
-// //Servo esc;
-// //int escPin = 23;  // connect ESC signal wire here
-// void parse_command(int* cmd_id, int* paramsa, int* paramsb){
-//     Serial.println("Waiting for command...");
-//     digitalWrite(2,HIGH);
-    
+requestAnimationFrame(poll);
+</script>
+</body></html>
+)";
+  server.send(200, "text/html", html);
+}
 
+void forward()
+{
+  esc2.writeMicroseconds(1500 - drivespeed);
+  esc.writeMicroseconds(1500 + drivespeed);
+  server.send(200, "text/plain", "Moving Forward");
+}
 
-//     // --- wait for start byte ---
-//     byte start_byte;
-//     while(true){
-//         if(Serial.available() >= 1){
-//             Serial.readBytes(&start_byte, 1);
-//             if(start_byte == CMD_START){
-//                 break;
-//             }
-//         }
-//     }
+void backward()
+{
+  esc2.writeMicroseconds(1500 + drivespeed);
+  esc.writeMicroseconds(1500 - drivespeed);
+  server.send(200, "text/plain", "Moving Backward");
+}
 
-//     Serial.println("Start byte received");
-//     digitalWrite(2,LOW);
-    
+void left()
+{
+  esc2.writeMicroseconds(1500 + rotspeed);
+  esc.writeMicroseconds(1500 + rotspeed);
+  server.send(200, "text/plain", "Turning Left");
+}
 
+void right()
+{
+  esc2.writeMicroseconds(1500 - rotspeed);
+  esc.writeMicroseconds(1500 - rotspeed);
+  server.send(200, "text/plain", "Turning Right");
+}
 
-//     // // --- read command ID ---
-//     // while(Serial.available() < sizeof(int)) {} 
-//     // Serial.readBytes((char*)cmd_id, sizeof(int));
-//     // Serial.print("Command ID: ");
-//     // Serial.println(*cmd_id);
+void stopMotors()
+{
+  esc2.writeMicroseconds(1500);
+  esc.writeMicroseconds(1500);
+  server.send(200, "text/plain", "Motors Stopped");
+}
 
-//     // // --- read number of parameters ---
-//     // while(Serial.available() < sizeof(int)) {}
-//     // Serial.readBytes((char*)num_params, sizeof(int));
-//     // Serial.print("Number of parameters: ");
-//     // Serial.println(*num_params);
+void setup()
+{
+  Serial.begin(115200);
 
-//     // // --- read parameters ---
-//     // for(int i = 0; i < *num_params; i++){
-//     //     while(Serial.available() < sizeof(int)) {}
-//     //     Serial.readBytes((char*)&params[i], sizeof(int));
-//     // }
-//     // Serial.println("Parameters received");
-//     // for(int i = 0; i < *num_params; i++){
-//     //     Serial.print("Param ");
-//     //     Serial.print(i);
-//     //     Serial.print(": ");
-//     //     Serial.println(params[i]);
-//     // }
+  esc.attach(escPin, 1000, 2000);
+  esc2.attach(escPin2, 1000, 2000);
+  esc.writeMicroseconds(1500);
+  esc2.writeMicroseconds(1500);
+  delay(2000); // wait for ESCs to arm
 
-//     while(Serial.available() < 1) {} 
-//     Serial.readBytes((uint8_t*)cmd_id, 1);
-//     Serial.print("Command recieved");
-//     Serial.println(*cmd_id);
-    
-//     while(Serial.available() < sizeof(int)) {} 
-//     Serial.readBytes((char*)paramsa, sizeof(int));
-//     Serial.print("Data 1");
-//     Serial.println(*paramsa);
-    
-//     while(Serial.available() < sizeof(int)) {} 
-//     Serial.readBytes((char*)paramsb, sizeof(int));
-//     Serial.print("Data 2");
-//     Serial.println(*paramsb);
+  Serial.println(WiFi.macAddress());
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.println(".");
+  }
+  Serial.println("Connected to WiFi");
 
-//     // --- read end byte ---
-//     byte end_byte;
-//     while(Serial.available() < 1) {}  // only 1 byte now
-//     Serial.readBytes(&end_byte, 1);
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/forward", HTTP_GET, forward);
+  server.on("/backward", HTTP_GET, backward);
+  server.on("/left", HTTP_GET, left);
+  server.on("/right", HTTP_GET, right);
+  server.on("/stop", HTTP_GET, stopMotors);
 
-//     // if(end_byte != CMD_END){
-//     //     *cmd_id = CMD_ERROR;
-//     //     Serial.println("Error: Invalid end byte");
-//     // }
-//     Serial.println("End byte received");
-    
-// }
+  server.begin();
+  Serial.println("HTTP server started");
+  Serial.print("ESP32 Web Server IP Address: ");
+  Serial.println(WiFi.localIP());
+}
 
-
-// TaskHandle_t serialIO;
-// void serialIOCode(void * pvParameters);
-
-
-// void setup()
-// {
-//   pinMode(2,OUTPUT);
-//   //while(!Serial);
-//   Serial.begin(115200);
-//   Serial.println();
-//   Serial.println(__FILE__);
-//   //esc.attach(escPin, 1000, 2000); // min/max pulse width in µs
-//   //esc.writeMicroseconds(1500);    //
-//   delay(2000);
-//   Serial.println("");   
-
-//   Serial.begin(115200);
-//   Serial.println();
-//   Serial.println(__FILE__);
-
-//   Serial.println();
-
-
-
-
-
-//   //ASL.setAddress(0x38);
-
-
-
-//   esc.attach(escPin, 1000, 2000); // min/max pulse width in µs
-//   esc2.attach(escPin2, 1000, 2000);
-//   esc.writeMicroseconds(1500);    // neutral
-//   esc2.writeMicroseconds(1500);
-//   delay(2000); 
-//                 // wait for ESC to arm
-
-
-//   xTaskCreatePinnedToCore(
-//     serialIOCode, /* Task function. */
-//     "serialIO", /* name of task. */
-//     4096, /* Stack size of task */
-//     NULL, /* parameter of the task */
-//     1, /* priority of the task */
-//     &serialIO, /* Task handle to keep track of created task */
-//     0);          /* pin task to core 0 */
-
-
-// }
-
-
-
-// // accumulator
-// ////////////////////////////////////////////////////////////
-
-// /////////////////////////////////////////////////////////////
-
-
-// // loop for serial communication later
-
-// ////////////////////////////////////////////////////////////
-// void serialIOCode( void * pvParameters ){
-//   for(;;){
-    
-
-//   static bool printed = false;
-//     if(!printed) {
-//         Serial.println("Drivetrain Firmware Initialized");
-//         printed = true;
-//     }
-
-//     int cmd_id;
-    
-//     int params_a;  // buffer for parameters
-//     int params_b;
-    
-
-//     // begin parsing incoming commands
-//     parse_command(&cmd_id, &params_a, &params_b);
-//     Serial.println(params_a);
-//     Serial.println(params_b);
-//     if (params_a != 1500){
-//         digitalWrite(2,HIGH);
-//     }
-//     else{
-//         digitalWrite(2,LOW);
-//     }
-    
-
-//     esc2.writeMicroseconds(params_a);    
-//     esc.writeMicroseconds(params_b);
-//     vTaskDelay(10 / portTICK_PERIOD_MS); 
-//   }
-// }
-// /////////////////////////////////////////////////////////////
-
-
-
-// //supposed to be some kind of writer for the code
-
-// void loop()
-// {
-    
-
-//     // int i = 200;
-//     // esc2.writeMicroseconds(1500-i);    // neutral
-//     // esc.writeMicroseconds(1500+i);
-//     // delay(5000);
-
-//     // esc2.writeMicroseconds(1500+i);    // neutral
-//     // esc.writeMicroseconds(1500-i);
-//     // delay(5000);
-
-//     // i = 200;
-//     // esc2.writeMicroseconds(1500-i);    // neutral
-//     // esc.writeMicroseconds(1500+i);
-//     // delay(3000);
-
-
-//     // while (true) {}
-    
-
-// }
+void loop()
+{
+  server.handleClient();
+}
