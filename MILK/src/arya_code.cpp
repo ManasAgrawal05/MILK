@@ -1,23 +1,32 @@
-
-
-/////////////////////////////////////////////////////////////////////////////
-
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESP32Servo.h>
 
 Servo esc;
-int escPin = 23;
+int escPin = 23; // connect ESC signal wire here
 Servo esc2;
 int escPin2 = 22;
 
-const char *ssid = "utexas-iot";
-const char *password = "29869378965001014094";
+const bool FORWARD = true;
+const bool BACKWARD = false;
+
+const char *ssid = "utexas-iot";               // Your Wi-Fi SSID
+const char *password = "29869378965001014094"; // Your Wi-Fi password
 
 WebServer server(80);
 
-const int drivespeed = 250;
+// TODO: change these if needed
+const int LEFT_FW = 32;
+const int LEFT_BW = 33;
+const int RIGHT_FW = 25;
+const int RIGHT_BW = 26;
+
+const int drivespeed = 150;
 const int rotspeed = 100;
+
+const int SERVO = 16;
+Servo myServo;
+int curAngle = 90;
 
 void handleRoot()
 {
@@ -28,7 +37,8 @@ void handleRoot()
 <p>Connect Xbox controller via Bluetooth, then press any button.</p>
 <script>
 var gamepadIndex = null;
-var currentCmd = '';
+var prevLeft = 0, prevRight = 0;
+var deadzone = 0.1;
 
 window.addEventListener('gamepadconnected', function(e) {
   gamepadIndex = e.gamepad.index;
@@ -38,30 +48,26 @@ window.addEventListener('gamepadconnected', function(e) {
 window.addEventListener('gamepaddisconnected', function(e) {
   gamepadIndex = null;
   document.getElementById('status').textContent = 'Controller disconnected';
-  fetch('/stop');
-  currentCmd = '';
+  fetch('/drive?left=0&right=0');
+  prevLeft = 0; prevRight = 0;
 });
 
-function getCmd(gp) {
-  var deadzone = 0.2;
-  var x = gp.axes[0]; // left stick X
-  var y = gp.axes[1]; // left stick Y  (-1 = up/forward)
-  if (Math.abs(y) >= Math.abs(x) && Math.abs(y) > deadzone) {
-    return y < 0 ? 'forward' : 'backward';
-  } else if (Math.abs(x) > deadzone) {
-    return x < 0 ? 'left' : 'right';
-  }
-  return 'stop';
+function applyDeadzone(val) {
+  return Math.abs(val) < deadzone ? 0 : val;
 }
 
 function poll() {
   if (gamepadIndex !== null) {
     var gp = navigator.getGamepads()[gamepadIndex];
     if (gp) {
-      var cmd = getCmd(gp);
-      if (cmd !== currentCmd) {
-        currentCmd = cmd;
-        fetch('/' + cmd);
+      var left  = applyDeadzone(gp.axes[1]); // left stick Y
+      var right = applyDeadzone(gp.axes[3]); // right stick Y
+      left  = Math.round(left  * 100) / 100;
+      right = Math.round(right * 100) / 100;
+      if (Math.abs(left - prevLeft) > 0.02 || Math.abs(right - prevRight) > 0.02) {
+        prevLeft  = left;
+        prevRight = right;
+        fetch('/drive?left=' + left + '&right=' + right);
       }
     }
   }
@@ -75,32 +81,21 @@ requestAnimationFrame(poll);
   server.send(200, "text/html", html);
 }
 
-void forward()
+// left/right are axis values in [-1, 1]: -1 = full forward, +1 = full backward
+void handleDrive()
 {
-  esc2.writeMicroseconds(1500 - drivespeed);
-  esc.writeMicroseconds(1500 + drivespeed);
-  server.send(200, "text/plain", "Moving Forward");
-}
+  float left = server.arg("left").toFloat();
+  float right = server.arg("right").toFloat();
 
-void backward()
-{
-  esc2.writeMicroseconds(1500 + drivespeed);
-  esc.writeMicroseconds(1500 - drivespeed);
-  server.send(200, "text/plain", "Moving Backward");
-}
+  left = constrain(left, -1.0f, 1.0f);
+  right = constrain(right, -1.0f, 1.0f);
 
-void left()
-{
-  esc2.writeMicroseconds(1500 + rotspeed);
-  esc.writeMicroseconds(1500 + rotspeed);
-  server.send(200, "text/plain", "Turning Left");
-}
+  // esc2 = left motor:  forward was 1500 - drivespeed  (axis -1 -> 1500 - drivespeed)
+  esc2.writeMicroseconds(1500 + (int)(left * drivespeed));
+  // esc  = right motor: forward was 1500 + drivespeed  (axis -1 -> 1500 + drivespeed)
+  esc.writeMicroseconds(1500 - (int)(right * drivespeed));
 
-void right()
-{
-  esc2.writeMicroseconds(1500 - rotspeed);
-  esc.writeMicroseconds(1500 - rotspeed);
-  server.send(200, "text/plain", "Turning Right");
+  server.send(200, "text/plain", "OK");
 }
 
 void stopMotors()
@@ -113,13 +108,24 @@ void stopMotors()
 void setup()
 {
   Serial.begin(115200);
+  pinMode(LEFT_FW, OUTPUT);
+  pinMode(LEFT_BW, OUTPUT);
+  pinMode(RIGHT_FW, OUTPUT);
+  pinMode(RIGHT_BW, OUTPUT);
 
-  esc.attach(escPin, 1000, 2000);
+  digitalWrite(LEFT_FW, LOW);
+  digitalWrite(LEFT_BW, LOW);
+  digitalWrite(RIGHT_FW, LOW);
+  digitalWrite(RIGHT_BW, LOW);
+
+  // Attach the servo
+  esc.attach(escPin, 1000, 2000); // min/max pulse width in µs
   esc2.attach(escPin2, 1000, 2000);
-  esc.writeMicroseconds(1500);
+  esc.writeMicroseconds(1500); // neutral
   esc2.writeMicroseconds(1500);
-  delay(2000); // wait for ESCs to arm
+  (2000);
 
+  // Connect to Wi-Fi
   Serial.println(WiFi.macAddress());
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi...");
@@ -130,15 +136,14 @@ void setup()
   }
   Serial.println("Connected to WiFi");
 
+  // Serve the web page
   server.on("/", HTTP_GET, handleRoot);
-  server.on("/forward", HTTP_GET, forward);
-  server.on("/backward", HTTP_GET, backward);
-  server.on("/left", HTTP_GET, left);
-  server.on("/right", HTTP_GET, right);
+  server.on("/drive", HTTP_GET, handleDrive);
   server.on("/stop", HTTP_GET, stopMotors);
 
   server.begin();
   Serial.println("HTTP server started");
+  // Print the IP address
   Serial.print("ESP32 Web Server IP Address: ");
   Serial.println(WiFi.localIP());
 }
@@ -146,4 +151,7 @@ void setup()
 void loop()
 {
   server.handleClient();
+  // Serial.println(WiFi.localIP());
 }
+
+/////////////////////////////////////////////////////////////////////////
